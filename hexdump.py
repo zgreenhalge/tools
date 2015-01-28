@@ -2,7 +2,6 @@
 
 import sys
 
-fd = None
 linen = 0
 linef = "{0:08X}  {1:s}  |{2:s}|" #line no, hex bytes, ASCII chars
 hexLine = "{} {} {} {} {} {} {} {}  {} {} {} {} {} {} {} {}" #16 hex bytes, string format to accept blanks at EOF
@@ -20,7 +19,7 @@ def main(args):
 
 def translate(fd):
 	#reads the file 16 bytes at a time, and prints out the values
-	global linen, fd
+	global linen
 	line = fd.read(16)
 	while line:
 		printLine(line)
@@ -65,4 +64,4 @@ def usage():
 	print("hexdump <inputfile>")
 
 if __name__ == "__main__":
-	main(sys.argv[])
+	main(sys.argv)
