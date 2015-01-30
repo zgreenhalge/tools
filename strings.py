@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import sys
 
@@ -25,23 +25,25 @@ def main(args):
 
 def translate(fd):
 	"""reads the file 1 line at a time"""
-	line = fd.readLine()
+	line = fd.readline()
 	while line:
 		process(line)
-		line = fd.readLine()
+		line = fd.readline()
 
 
 def process(line):
 	"""Reads through the line 1 byte at a time, printing all strings found"""
 	global cur
+	string = ""
 	for byte in line:
-		if byte >= 32 and byte <= 126:
+		#is ' ' a valid char or is it a separator?
+		if byte in range(32, 127): 
 			string = byte.to_bytes(1, sys.byteorder).decode(encoding="ascii")
-		if string != " ":
-			cur.append(string)
+			cur.append(string) 
 		else:
+			#if byte is a non-printable char, end the string
 			s = ''.join(cur)
-			if len(s) >= size:
+			if len(cur) >= size:
 				print(s)
 			cur = []
 
