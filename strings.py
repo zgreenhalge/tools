@@ -8,7 +8,7 @@ cur = []
 def main(args):
 	"""Checks for proper argument structure, then calls the translate function"""
 	global size
-	if len(args) != 3:
+	if not args and len(args) != 3:
 		usage()
 		sys.exit(2)
 	try:
@@ -16,10 +16,10 @@ def main(args):
 		with open(args[2], "rb") as fd:
 			translate(fd)
 	except IOError as e:
-		print("Exception raised: " + str(e))
+		print("IO Error: " + sys.exc_info()[0])
 		sys.exit(1) #indicate an error occured
 	except Exception as e:
-		print("Exception raised: " + str(e))
+		print("Exception raised: " + sys.exc_info()[0])
 		usage()
 		sys.exit(1) #indicate an error occurred
 
