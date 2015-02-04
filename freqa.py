@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 Author: Zach Greenhalge
 A script to perform character frequency analysis on a body of text
