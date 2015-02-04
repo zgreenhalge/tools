@@ -32,20 +32,23 @@ def translate(fd):
 
 
 def process(line):
-	"""Reads through the line 1 byte at a time, printing all strings found"""
+	"""Reads through the line 2 bytes at a time, printing all strings found"""
 	global cur
 	string = ""
-	for byte in line:
-		#is ' ' a valid char or is it a separator?
-		if byte in range(32, 127): 
-			string = byte.to_bytes(1, sys.byteorder).decode(encoding="ascii")
-			cur.append(string) 
-		else:
-			#if byte is a non-printable char, end the string
-			s = ''.join(cur)
+	printRange = range(32, 127)
+	for b1, b2 in zip(line[0::2], line[1::2]):
+		if b1 in printRange and b2 in printRange:
+			string = "%c" % b"".join(b1,b2)
+		elif b1 == '00':
+			string = "%c" % b2
+		elif b2 == '00':
+			string = "%c" % b1
+		elif not (b1 in printRange and b2 in printRange):
 			if len(cur) >= size:
-				print(s)
-			cur = []
+				print(''.join(cur))
+				cur = []
+			continue
+		cur.append(string)
 
 def usage():
 	"""Prints the usage of this script"""
