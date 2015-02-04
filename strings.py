@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import sys
+import sys, traceback
 
 size = 4
 cur = []
@@ -16,10 +16,11 @@ def main(args):
 		with open(args[2], "rb") as fd:
 			translate(fd)
 	except IOError as e:
-		print("IO Error: " + sys.exc_info()[0])
+		print("IO Error: " + sys.exc_info()[1])
 		sys.exit(1) #indicate an error occured
 	except Exception as e:
-		print("Exception raised: " + sys.exc_info()[0])
+		print("Exception raised: " + str(sys.exc_info()[1]))
+		traceback.print_tb(sys.exc_info()[2])
 		usage()
 		sys.exit(1) #indicate an error occurred
 
@@ -35,20 +36,19 @@ def process(line):
 	"""Reads through the line 2 bytes at a time, printing all strings found"""
 	global cur
 	string = ""
+	last = "00"
 	printRange = range(32, 127)
-	for b1, b2 in zip(line[0::2], line[1::2]):
-		if b1 in printRange and b2 in printRange:
-			string = "%c" % b"".join(b1,b2)
-		elif b1 == '00':
-			string = "%c" % b2
-		elif b2 == '00':
-			string = "%c" % b1
-		elif not (b1 in printRange and b2 in printRange):
-			if len(cur) >= size:
-				print(''.join(cur))
-				cur = []
-			continue
-		cur.append(string)
+	for byte in line:
+		if byte in printRange: 
+			string = byte.to_bytes(1, sys.byteorder).decode(encoding="ascii")
+			cur.append(string) 
+		elif last not in printRange and len(cur) >= size:
+			#if byte is a non-printable char, end the string
+			print(''.join(cur))
+			cur = []
+		last = byte
+	if len(cur) >= size: #final print for EOF
+		print(''.join(cur))
 
 def usage():
 	"""Prints the usage of this script"""

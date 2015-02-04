@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 
-linen = 0
+count = 0
 linef = "{0:08X}  {1:s}  |{2:s}|" #line no, hex bytes, ASCII chars
 hexLine = "{} {} {} {} {} {} {} {}  {} {} {} {} {} {} {} {}" #16 hex bytes, string format to accept blanks at EOF
 
@@ -18,11 +18,11 @@ def main(args):
 
 def translate(fd):
 	#reads the file 16 bytes at a time, and prints out the values
-	global linen
+	global count
 	line = fd.read(16)
 	while line:
 		printLine(line)
-		linen += 1
+		count += 16
 		line = fd.read(16)
 
 
@@ -47,7 +47,7 @@ def printLine(line):
 		for i in range(len(line)-1, 16):
 			hexStrs[i] = "  "
 	#Setup is complete, print with pre-made format strings
-	lineVal = linef.format(linen, hexLine.format(*hexStrs), ''.join(ascArr))
+	lineVal = linef.format(count, hexLine.format(*hexStrs), ''.join(ascArr))
 	print(lineVal)
 
 def find(char, string):
