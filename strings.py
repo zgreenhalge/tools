@@ -39,7 +39,7 @@ def process(line):
 	last = "00"
 	printRange = range(32, 127)
 	for byte in line:
-		if byte in printRange: 
+		if byte in printRange or byte == b'\x0A': 
 			string = byte.to_bytes(1, sys.byteorder).decode(encoding="ascii")
 			cur.append(string) 
 		elif last not in printRange and len(cur) >= size:
