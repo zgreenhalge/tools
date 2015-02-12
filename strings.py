@@ -43,7 +43,7 @@ def process(line):
 			string = byte.to_bytes(1, sys.byteorder).decode(encoding="ascii")
 			cur.append(string) 
 		elif last not in printRange and len(cur) >= size:
-			#if byte is a non-printable char, end the string
+			#two fails in two bytes, end the string
 			print(''.join(cur))
 			cur = []
 		last = byte
