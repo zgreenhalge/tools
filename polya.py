@@ -1,6 +1,6 @@
 #!\usr\bin\env python3
 """
-Provides functionality for most polynomial functions, including adding and multiplying in GF(2^m)
+Provides functionality for polynomial arithmetic functions, including adding and multiplying in GF(2^m)
 Author: Zach Greenhalge
 """
 
@@ -29,6 +29,8 @@ def main(args):
 		print("({}) * ({}) mod ({}) ~= ({}) in GF(2^m)".format(pretty_poly(p1), pretty_poly(p2), pretty_poly(p3), pretty_poly(g_mult(p1, p2, p3)[1])))
 	elif args[0] == "-a":
 		print("({}) + ({}) = ({})".format(pretty_poly(p1), pretty_poly(p2), pretty_poly(add(p1, p2))))
+	elif args[0] == "-s":
+		print("({}) - ({}) = ({})".format(pretty_poly(p1), pretty_poly(p2), pretty_poly(sub(p1, p2))))
 	else:
 		usage()
 		sys.exit(2)
@@ -49,6 +51,13 @@ def add(a, b):
 	idx = 0
 	for c1, c2 in zip(a, b):
 		c.append((c1 + c2))
+	return c
+
+def sub(a, b):
+	c = []
+	idx = 0
+	for c1, c2 in zip(a, b):
+		c.append((c1 - c2))
 	return c
 
 def g_add(a, b):
