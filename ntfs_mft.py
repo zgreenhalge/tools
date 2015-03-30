@@ -66,36 +66,20 @@ class MFTEntry:
 
 class MFTAttribute:
 	"""Parses an attribute in an MFTEntry"""
-	attr = {
-		16:  std_info,
-		32:  attr_list,
-		48:  file_name,
-		64:  object_id,
-		80:  security_desc,
-		96:  vol_name,
-		112: vol_info,
-		128: data,
-		144: index_root,
-		160: index_alloc,
-		176: bitmap,
-		192: reparse_pt,
-		256: logged_tool_stream,
-	}
-
 	attr_name = {
-		16:  "$STANDARD_INFORMATION"
-		32:  "$ATTRIBUTE_LIST"
-		48:  "$FILE_NAME"
-		64:  "$OBJECT_ID"
-		80:  "$SECURITY_DESCRIPTOR"
-		96:  "$VOLUME_NAME"
-		112: "$VOLUME_INFORMATION"
-		128: "$DATA"
-		144: "$INDEX_ROOT"
-		160: "$INDEX_ALLOCATION"
-		176: "$BITMAP"
-		192: "$REPARSE_POINT"
-		256: "$LOGGED_TOOL_STREAM"
+		16:  "$STANDARD_INFORMATION",
+		32:  "$ATTRIBUTE_LIST",
+		48:  "$FILE_NAME",
+		64:  "$OBJECT_ID",
+		80:  "$SECURITY_DESCRIPTOR",
+		96:  "$VOLUME_NAME",
+		112: "$VOLUME_INFORMATION",
+		128: "$DATA",
+		144: "$INDEX_ROOT",
+		160: "$INDEX_ALLOCATION",
+		176: "$BITMAP",
+		192: "$REPARSE_POINT",
+		256: "$LOGGED_TOOL_STREAM",
 	}
 
 	def __init__(self, start, parent):
@@ -110,7 +94,7 @@ class MFTAttribute:
 		self.name_off	= unpack("<H", parent.raw[self.offset+10:self.offset+12])[0]
 		self.flags 		= parent.raw[self.offset+12:self.offset+14]
 		self.unique_ID	= unpack("<H", parent.raw[self.offset+14:self.offset+16])[0]
-		self.type_name	= attr_name[self.type_ID]
+		self.type_name	= self.attr_name[self.type_ID]
 		self.next 		= self.offset + self.length
 
 		if self.nonresident:
@@ -122,34 +106,101 @@ class MFTAttribute:
 			self.content_act  = unpack("<Q", parent.raw[self.offset+48:self.offset+56])[0]
 			self.content_init = unpack("<Q", parent.raw[self.offset+56:self.offset+64])[0]
 			self.runlist 	  = []
-			self.len
-			self.residentStr  = "Non-Resident"
+			self.cur_head	  = 0
+			self.rl_header 	  = unpack("<B", parent.raw[self.offset+self.runlist_off:self.offset+self.runlist_off+1])[0]
+			self.len_runlen	= self.rl_header & 0x0F
+			self.len_runoff = self.rl_header & 0xF0 >> 4
+			self.current	  = self.offset + self.runlist_off + 1
+			while self.rl_header != b'\x00\x00':
+				self.len_runlen	= self.rl_header & 0x0F
+				self.len_runoff = self.rl_header & 0xF0 >> 4
+				self.run_length	= self.getUnsigned(parent.raw[self.current:self.current+self.len_runlen])
+				self.current 	= self.current + self.len_runlen
+				self.run_offset = self.getSigned(parent.raw[self.current:self.current+self.len_runoff])
+				self.current	= self.current + self.len_runoff
+				self.cur_head	= self.cur_head + self.run_offset
+				self.rl_header  = unpack("<B", parent.raw[self.current:self.current+1])[0]
+				self.current   += 1
+				for i in range(self.cur_head, self.cur_head+self.run_offset):
+					self.runlist.append(i)
+			self.residentStr    = "Non-Resident"
 		else:
-			self.content_size = unpack("<L", parent.raw[self.offset+16:self.offset+20])[0]
-			self.cont_offset  = unpack("<H", parent.raw[self.offset+20:self.offset+22])[0]
-			self.content_start= self.offset + self.cont_offset
-			self.content 	  = parent.raw[self.content_start:self.content_start + self.content_size]
-			self.residentStr  = "Resident"
+			self.content_size 	= unpack("<L", parent.raw[self.offset+16:self.offset+20])[0]
+			self.cont_offset  	= unpack("<H", parent.raw[self.offset+20:self.offset+22])[0]
+			self.content_start	= self.offset + self.cont_offset
+			self.content 	 	= parent.raw[self.content_start:self.content_start + self.content_size]
+			self.residentStr 	= "Resident"
 
-		self.attr[self.type_ID]()
+		self.attr_setup()
 
 		self.print_header()
-		self.print_attr[self.type_ID]
+		self.print_attr()
 
 		if parent.raw[self.next:self.next+4] != b'\xFF\xFF\xFF\xFF':
 			parent.add_attribute(MFTAttribute(self.next, self.parent))
 
 
-	def print_header():
+	def print_header(self):
 		print("Type: {} ({}) NameLen: ({}) {} size: {}".format(self.type_name, self.type_ID, self.name_len, self.residentStr, self.length))
 		if debug:
-			if self.nonresident:
-				pass
-			else:
+			if not self.nonresident:
 				print("Offset to content: {}   Size of Content: {}".format(self.cont_offset, self.content_size))
 				print()
 
+	def attr_setup(self):
+		if   self.type_ID == 16:
+			#$STANDARD_INFORMATION
+			pass
+		elif self.type_ID == 48:
+			#$FILE_NAME
+			pass
+		elif self.type_ID == 128:
+			#$DATA
+			pass
+		#ALL OTHER TYPES NOT SUPPORTED FOR THIS ASSIGNMENT
+
+	def print_attr(self):
+		if self.nonresident:
+			print("Runlist: {}".format(self.runlist))
+			return
+		if   self.type_ID == 16:
+			#$STANDARD_INFORMATION
+			pass
+		elif self.type_ID == 48:
+			#$FILE_NAME
+			pass
+		elif self.type_ID == 128:
+			#$DATA
+			pass
+		else:
+			print("    (unparsed attribute)")
 		
+	def getUnsigned(self, bites):
+		num = len(bites)
+		while ((num & (num - 1)) != 0) or num < 2:
+			bites = bites + b'\x00'
+			num = len(bites)
+		if len(bites) == 2:
+			return unpack("<H", bites)[0]
+		if len(bites) == 4:
+			return unpack("<L", bites)[0]
+		if len(bites) == 8:
+			return unpack("<Q", bites)[0]
+		raise Exception("Invalid byte len result: {} {}".format(len(bites), bites))
+
+	def getSigned(self, bites):
+			#assumes little endian
+			if len(bites) == 0:
+				raise Exception("0 bytes received...")
+			if len(bites) > 8:
+				raise Exception("Expected 8 bytes, got " + len(bites))
+			elif len(bites) < 8:
+				if bites[-1] >> 7 == 1:
+					pad = b'\xFF'
+				else:
+					pad = b'\x00'
+				padLength = 8-len(bites)
+			return unpack("<q", bites + (pad * padLength))[0]
 
 def main():
 	global bytes_per_sector, sectors_per_cluster, total_sectors, MFT_start_cluster, size_MFT_entry, size_index_record
