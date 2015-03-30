@@ -15,21 +15,6 @@ size_MFT_entry      = -1
 size_index_record   = -1
 debug = True
 
-attr_name = {}
-attr_name[16]  = "$STANDARD_INFORMATION"
-attr_name[32]  = "$ATTRIBUTE_LIST"
-attr_name[48]  = "$FILE_NAME"
-attr_name[64]  = "$OBJECT_ID"
-attr_name[80]  = "$SECURITY_DESCRIPTOR"
-attr_name[96]  = "$VOLUME_NAME"
-attr_name[112] = "$VOLUME_INFORMATION"
-attr_name[128] = "$DATA"
-attr_name[144] = "$INDEX_ROOT"
-attr_name[160] = "$INDEX_ALLOCATION"
-attr_name[176] = "$BITMAP"
-attr_name[192] = "$REPARSE_POINT"
-attr_name[256] = "$LOGGED_TOOL_STREAM"
-
 class MFTEntry:
 	"""Parses an MFT entry header and creates MFTAttribute instances for all attributes in the entry"""
 	printStr = "Sequence: {}\n$LogFile Sequence Number: {}\n{}\nUsed Size: {}\nAllocated Size: {}\n"
@@ -97,11 +82,27 @@ class MFTAttribute:
 		256: logged_tool_stream,
 	}
 
+	attr_name = {
+		16:  "$STANDARD_INFORMATION"
+		32:  "$ATTRIBUTE_LIST"
+		48:  "$FILE_NAME"
+		64:  "$OBJECT_ID"
+		80:  "$SECURITY_DESCRIPTOR"
+		96:  "$VOLUME_NAME"
+		112: "$VOLUME_INFORMATION"
+		128: "$DATA"
+		144: "$INDEX_ROOT"
+		160: "$INDEX_ALLOCATION"
+		176: "$BITMAP"
+		192: "$REPARSE_POINT"
+		256: "$LOGGED_TOOL_STREAM"
+	}
+
 	def __init__(self, start, parent):
 		self.parent 	= parent
 		self.offset 	= start
 		
-		# Attribute header: frist 16 bytes
+		# Attribute header: first 16 bytes
 		self.type_ID	= unpack("<L", parent.raw[self.offset:self.offset+4]    )[0]
 		self.length		= unpack("<L", parent.raw[self.offset+4:self.offset+8]  )[0]
 		self.nonresident= unpack("<b", parent.raw[self.offset+8:self.offset+9]  )[0]
@@ -109,13 +110,25 @@ class MFTAttribute:
 		self.name_off	= unpack("<H", parent.raw[self.offset+10:self.offset+12])[0]
 		self.flags 		= parent.raw[self.offset+12:self.offset+14]
 		self.unique_ID	= unpack("<H", parent.raw[self.offset+14:self.offset+16])[0]
+		self.type_name	= attr_name[self.type_ID]
 		self.next 		= self.offset + self.length
 
 		if self.nonresident:
+			self.VCN_start	  = unpack("<Q", parent.raw[self.offset+16:self.offset+24])[0]
+			self.VCN_end	  = unpack("<Q", parent.raw[self.offset+24:self.offset+32])[0]
+			self.runlist_off  = unpack("<H", parent.raw[self.offset+32:self.offset+34])[0]
+			self.compr_unit	  = unpack("<H", parent.raw[self.offset+34:self.offset+36])[0]
+			self.content_alloc= unpack("<Q", parent.raw[self.offset+40:self.offset+48])[0]
+			self.content_act  = unpack("<Q", parent.raw[self.offset+48:self.offset+56])[0]
+			self.content_init = unpack("<Q", parent.raw[self.offset+56:self.offset+64])[0]
+			self.runlist 	  = []
+			self.len
 			self.residentStr  = "Non-Resident"
 		else:
 			self.content_size = unpack("<L", parent.raw[self.offset+16:self.offset+20])[0]
 			self.cont_offset  = unpack("<H", parent.raw[self.offset+20:self.offset+22])[0]
+			self.content_start= self.offset + self.cont_offset
+			self.content 	  = parent.raw[self.content_start:self.content_start + self.content_size]
 			self.residentStr  = "Resident"
 
 		self.attr[self.type_ID]()
@@ -123,7 +136,7 @@ class MFTAttribute:
 		self.print_header()
 		self.print_attr[self.type_ID]
 
-		if parent.raw[self.next:self.next+4] != b'\xff\xff\xff\xff':
+		if parent.raw[self.next:self.next+4] != b'\xFF\xFF\xFF\xFF':
 			parent.add_attribute(MFTAttribute(self.next, self.parent))
 
 
