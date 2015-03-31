@@ -4,7 +4,7 @@ Author: Zach Greenhalge
 Parses the MFT entries in an NTFS system
 """
 
-import sys, math, traceback, time
+import sys, math, traceback, time, random
 from struct import unpack
 
 bytes_per_sector    = -1
@@ -22,7 +22,8 @@ class MFTEntry:
 	def __init__(self, start, fd):
 		self.offset 		= bytes_per_sector * sectors_per_cluster * start
 		fd.seek(self.offset, 0)
-		print("$MFT starts at: {0:} ({0:X})".format(self.offset))
+		if debug:
+			print("$MFT starts at: {0:} ({0:X})".format(self.offset))
 		self.raw			= fd.read(size_MFT_entry)
 		# print(repr(self.raw))
 
@@ -33,18 +34,18 @@ class MFTEntry:
 		self.seq_value   	= unpack("<H", self.raw[16:18])[0] # (16-17)
 		self.link_count		= unpack("<H", self.raw[18:20])[0] # (18-19)
 		self.attr_offset	= unpack("<H", self.raw[20:22])[0] # (20-21)
-		self.flags			= unpack("<2B", self.raw[22:24])   #  0x01 = in use, 0x02 = directory (22-23)
+		self.flags			= unpack("<H", self.raw[22:24])[0] #  0x01 = in use, 0x02 = directory (22-23)
 		self.size_used		= unpack("<l", self.raw[24:28])[0] # (24-27)
 		self.allocated_size = unpack("<L", self.raw[28:32])[0] # (28-31)
 		self.base_entry_ref = unpack("<Q", self.raw[32:40])[0] # (32-39)
 		self.next_att_id    = unpack("<H", self.raw[40:42])[0] # (40-41)
 		self.flagStr = ""
-		if self.flags[0] == 1 or self.flags[1] == 1:
+		if self.flags & 0x01:
 			self.flagStr += "Allocated\n"
-		if self.flags[0] == 2 or self.flags[1] == 2:
+		if self.flags & 0x02:
 			self.flagStr += "Directory\n"
 		print("MFT Entry Header Values:")
-		print(self.printStr.format(self.seq_value, self.LSN, self.flagStr, self.size_used+self.attr_offset, self.allocated_size))
+		print(self.printStr.format(self.seq_value, self.LSN, self.flagStr, self.size_used, self.allocated_size))
 
 		fixup_array = self.raw[self.fixup_offset:self.fixup_offset+(self.fixup_entry*2)]
 		fixup_signature = unpack(">H", fixup_array[0:2])[0]
@@ -71,9 +72,9 @@ class MFTEntry:
 			# else:
 			# 	print("  (offset+header) {} + 16 > {} (used size) or len(attributes)={} > {} (next attr ID)".format(offset, self.size_used, len(self.attributes), self.next_att_id))
 		else:
-			print("  First four bytes found: 0x{}".format(hex_from_bytes(self.raw[offset:offset+4])))
-			print()
-			print("Parsing complete")
+			if debug: 
+				print("  First four bytes found: 0x{}".format(hex_from_bytes(self.raw[offset:offset+4])))
+				print()
 
 
 	def add_attribute(self, attribute):
@@ -112,6 +113,7 @@ class MFTAttribute:
 		self.unique_ID	= unpack("<H", parent.raw[self.offset+14:self.offset+16])[0]
 		self.type_name	= self.attr_name[self.type_ID]
 		self.next 		= self.offset + self.length
+		self.runlist 	= []
 
 		if self.nonresident:
 			self.VCN_start	  = unpack("<Q", parent.raw[self.offset+16:self.offset+24])[0]
@@ -121,10 +123,7 @@ class MFTAttribute:
 			self.content_alloc= unpack("<Q", parent.raw[self.offset+40:self.offset+48])[0]
 			self.content_act  = unpack("<Q", parent.raw[self.offset+48:self.offset+56])[0]
 			self.content_init = unpack("<Q", parent.raw[self.offset+56:self.offset+64])[0]
-			self.residentStr    = "Non-Resident"
-			self.print_header()
-
-			self.runlist 	  = []
+			self.residentStr  = "Non-Resident"
 			self.run_start	  = 0
 			if debug:
 				print("  RL offset: {}".format(self.runlist_off))
@@ -163,18 +162,25 @@ class MFTAttribute:
 			self.content_start	= self.offset + self.cont_offset
 			self.content 	 	= parent.raw[self.content_start:self.content_start + self.content_size]
 			self.residentStr 	= "Resident"
-			self.print_header()
 			self.attr_setup()
 
+		self.print_header()
 		self.print_attr()
 
 		parent.new_attribute(self.next)
 
+	def get_attribute(self, type_id):
+		for attr in self.attributes:
+			if attr.type_ID == type_id:
+				return attr
+		return None
 
 	def print_header(self):
 		print("Type: {} ({}) NameLen: ({}) {}   size: {}".format(self.type_name, self.type_ID, self.name_len, self.residentStr, self.length))
 		if debug:
-			if not self.nonresident:
+			if self.nonresident:
+				print("  Start cluster: {}   Size of content: {}".format(self.runlist[0], self.content_act))
+			else:
 				print("  Offset to content: {}   Size of Content: {}".format(self.cont_offset, self.content_size))
 
 	def attr_setup(self):
@@ -265,7 +271,6 @@ class MFTAttribute:
 			print("    (unparsed attribute)")
 		print()
 		print('-'*75)
-		print()
 	
 	def get_flags(self, bites):
 		ret = []
@@ -331,9 +336,13 @@ class MFTAttribute:
 
 def main():
 	global bytes_per_sector, sectors_per_cluster, total_sectors, MFT_start_cluster, size_MFT_entry, size_index_record
-	if len(sys.argv) != 2:
+	if len(sys.argv) < 2 or len(sys.argv) > 3:
 		usage()
 		sys.exit(2)
+	if len(sys.argv) == 3:
+		entry_num = int(sys.argv[2])
+	else:
+		entry_num = -1
 	with open(sys.argv[1], "rb") as fd:
 		fd.read(3) #(3 bytes) - assembly to jump to boot code
 		fd.read(8) #(8 bytes) - OEM name of drive
@@ -364,10 +373,18 @@ def main():
 			print("Size of MFT: {}".format(size_MFT_entry))
 			print("Total sectors: {}".format(total_sectors))
 			print()
-		mft = MFTEntry(MFT_start_cluster, fd)
+		mft  = MFTEntry(MFT_start_cluster, fd)
+		data = mft.get_attribute(128)
+		if data == None:
+			raise Exception("Data attribute does not exist for entry {}".format(mft.seq_value))
+		if entry_num < 0:
+			entry_num = random.randint(16, math.ceil(mft.data_size/size_MFT_entry))
+		entry_start_cluster, bytes_deep = divmod(((entry_num-1)*size_MFT_entry)/(sectors_per_cluster*bytes_per_sector))
+
+
 
 def usage():
-	print("ntfs_mft")
+	print("ntfs_mft <path> [entry #]")
 
 def hex_from_bytes(data):
 	return "".join("{:02X}".format(i) for i in data)
